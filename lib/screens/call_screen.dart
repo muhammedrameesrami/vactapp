@@ -1,0 +1,287 @@
+import 'dart:async';
+import 'dart:ui';
+import 'package:flutter/services.dart';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:vact_sdk/vact_sdk.dart';
+
+/// Active video call screen. Receives VactCall via route arguments.
+class CallScreen extends StatefulWidget {
+  const CallScreen({super.key});
+
+  @override
+  State<CallScreen> createState() => _CallScreenState();
+}
+
+class _CallScreenState extends State<CallScreen> {
+  VactCall? _call;
+  final _localRenderer = RTCVideoRenderer();
+  final _remoteRenderer = RTCVideoRenderer();
+  late final StreamSubscription<VactCallState> _stateSub;
+
+  bool _muted = false;
+  bool _cameraOn = true;
+  VactCallState _state = VactCallState.connecting;
+
+  @override
+  void initState() {
+    super.initState();
+    _initRenderers();
+  }
+
+  Future<void> _initRenderers() async {
+    await _localRenderer.initialize();
+    await _remoteRenderer.initialize();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final call = ModalRoute.of(context)?.settings.arguments as VactCall?;
+    if (call != null && _call == null) {
+      _call = call;
+      _localRenderer.srcObject = call.localStream;
+      _remoteRenderer.srcObject = call.remoteStream;
+
+      _stateSub = call.states.listen((state) {
+        if (!mounted) return;
+        setState(() => _state = state);
+        if (state == VactCallState.ended || state == VactCallState.failed) {
+          Navigator.of(context).popUntil((route) => route.settings.name == '/home');
+        }
+      });
+
+      // Use speaker for video calls
+      call.setAudioRoute(VactAudioRoute.speaker);
+      if (mounted) setState(() {});
+    }
+  }
+
+  @override
+  void dispose() {
+    _stateSub.cancel();
+    _localRenderer.dispose();
+    _remoteRenderer.dispose();
+    _call?.end(); // Safe to call multiple times
+    super.dispose();
+  }
+
+  String get _statusLabel => switch (_state) {
+    VactCallState.ringing => 'Ringing…',
+    VactCallState.connecting => 'Connecting…',
+    VactCallState.connected => 'Connected',
+    VactCallState.reconnecting => 'Reconnecting…',
+    VactCallState.ended => 'Call ended',
+    VactCallState.failed => 'Call failed',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final call = _call;
+    final calleeId = call?.otherUserId ?? '';
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          // Remote video — full screen
+          Positioned.fill(
+            child: call != null
+                ? RTCVideoView(_remoteRenderer, objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover)
+                : Container(
+                    color: const Color(0xFF1A1A2E),
+                    child: const Center(
+                      child: CircularProgressIndicator(color: Color(0xFF6C63FF)),
+                    ),
+                  ),
+          ),
+
+          // Dark gradient overlay at top and bottom
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.center,
+                  colors: [Colors.black54, Colors.transparent],
+                ),
+              ),
+            ),
+          ),
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.bottomCenter,
+                  end: Alignment.center,
+                  colors: [Colors.black87, Colors.transparent],
+                ),
+              ),
+            ),
+          ),
+
+          // Local video preview — top right
+          if (_cameraOn && call != null)
+            Positioned(
+              top: 56,
+              right: 16,
+              width: 120,
+              height: 180,
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.15), width: 1),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.4),
+                      blurRadius: 20,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(15),
+                  child: RTCVideoView(_localRenderer, mirror: true, objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover),
+                ),
+              ),
+            ),
+
+          // Callee name + status — top left
+          Positioned(
+            top: 56,
+            left: 20,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  calleeId,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    shadows: [Shadow(color: Colors.black45, blurRadius: 8)],
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _statusLabel,
+                  style: const TextStyle(
+                    color: Colors.white60,
+                    fontSize: 13,
+                    shadows: [Shadow(color: Colors.black45, blurRadius: 6)],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Controls bar — bottom
+          Positioned(
+            left: 24,
+            right: 24,
+            bottom: 40,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(32),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(32),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      // Mute
+                      _ControlButton(
+                        icon: _muted ? Icons.mic_off : Icons.mic,
+                        color: _muted ? Colors.redAccent : Colors.white.withValues(alpha: 0.1),
+                        onTap: () async {
+                          setState(() => _muted = !_muted);
+                          await call?.setMicrophoneEnabled(!_muted);
+                        },
+                      ),
+                      // Camera toggle
+                      _ControlButton(
+                        icon: _cameraOn ? Icons.videocam : Icons.videocam_off,
+                        color: _cameraOn ? Colors.white.withValues(alpha: 0.1) : Colors.redAccent,
+                        onTap: () async {
+                          setState(() => _cameraOn = !_cameraOn);
+                          await call?.setCameraEnabled(_cameraOn);
+                        },
+                      ),
+                      // Switch camera
+                      _ControlButton(
+                        icon: Icons.cameraswitch,
+                        color: Colors.white.withValues(alpha: 0.1),
+                        onTap: () => call?.switchCamera(),
+                      ),
+                      // End call — larger red button
+                      GestureDetector(
+                        onTap: () {
+                          HapticFeedback.lightImpact();
+                          call?.end();
+                          Navigator.of(context).popUntil((route) => route.settings.name == '/home');
+                        },
+                        child: Container(
+                          width: 60,
+                          height: 60,
+                          decoration: BoxDecoration(
+                            color: Colors.redAccent,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.redAccent.withValues(alpha: 0.5),
+                                blurRadius: 16,
+                                spreadRadius: 2,
+                              ),
+                            ],
+                          ),
+                          child: const Icon(Icons.call_end, size: 28, color: Colors.white),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ControlButton extends StatelessWidget {
+  const _ControlButton({
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        onTap();
+      },
+      child: Container(
+        width: 52,
+        height: 52,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon, color: Colors.white, size: 24),
+      ),
+    );
+  }
+}

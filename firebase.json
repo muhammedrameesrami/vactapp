@@ -1,0 +1,62 @@
+{
+  "functions": [
+    {
+      "codebase": "default",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ],
+      "source": "functions"
+    }
+  ],
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "mitco-task",
+          "appId": "1:22010132142:android:f1a246135ec94c7b0ddf3f",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "mitco-task",
+          "configurations": {
+            "android": "1:22010132142:android:f1a246135ec94c7b0ddf3f",
+            "ios": "1:22010132142:ios:49417e21df6e9e3b0ddf3f",
+            "web": "1:22010132142:web:360d8d5c30d31f470ddf3f"
+          }
+        }
+      }
+    }
+  },
+  "firestore": {
+    "database": "(default)",
+    "location": "asia-south1",
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "hosting": {
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  },
+  "storage": {
+    "rules": "storage.rules"
+  },
+  "auth": {
+    "providers": {}
+  }
+}

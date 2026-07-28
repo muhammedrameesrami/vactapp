@@ -1,0 +1,105 @@
+{
+  "project_info": {
+    "project_number": "22010132142",
+    "project_id": "mitco-task",
+    "storage_bucket": "mitco-task.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:22010132142:android:68812e0c3944db7c0ddf3f",
+        "android_client_info": {
+          "package_name": "com.example.ayamutty"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDfaeHPVbiGjpTAYzgqoMhuaZlwteSSrwA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:22010132142:android:b921f4bb84d2b6220ddf3f",
+        "android_client_info": {
+          "package_name": "com.example.block"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDfaeHPVbiGjpTAYzgqoMhuaZlwteSSrwA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:22010132142:android:0f114668bd8ddf610ddf3f",
+        "android_client_info": {
+          "package_name": "com.example.mitco_task"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDfaeHPVbiGjpTAYzgqoMhuaZlwteSSrwA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:22010132142:android:fb86d3477681101d0ddf3f",
+        "android_client_info": {
+          "package_name": "com.example.vact"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDfaeHPVbiGjpTAYzgqoMhuaZlwteSSrwA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:22010132142:android:f1a246135ec94c7b0ddf3f",
+        "android_client_info": {
+          "package_name": "com.example.vactonline"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDfaeHPVbiGjpTAYzgqoMhuaZlwteSSrwA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
