@@ -24,6 +24,8 @@ class _CallScreenState extends State<CallScreen> {
   bool _cameraOn = true;
   VactCallState _state = VactCallState.connecting;
 
+  bool _renderersInitialized = false;
+
   @override
   void initState() {
     super.initState();
@@ -33,6 +35,19 @@ class _CallScreenState extends State<CallScreen> {
   Future<void> _initRenderers() async {
     await _localRenderer.initialize();
     await _remoteRenderer.initialize();
+    if (mounted) {
+      setState(() {
+        _renderersInitialized = true;
+      });
+      _attachStreams();
+    }
+  }
+
+  void _attachStreams() {
+    if (_renderersInitialized && _call != null) {
+      _localRenderer.srcObject = _call!.localStream;
+      _remoteRenderer.srcObject = _call!.remoteStream;
+    }
   }
 
   @override
@@ -41,8 +56,7 @@ class _CallScreenState extends State<CallScreen> {
     final call = ModalRoute.of(context)?.settings.arguments as VactCall?;
     if (call != null && _call == null) {
       _call = call;
-      _localRenderer.srcObject = call.localStream;
-      _remoteRenderer.srcObject = call.remoteStream;
+      _attachStreams();
 
       _stateSub = call.states.listen((state) {
         if (!mounted) return;

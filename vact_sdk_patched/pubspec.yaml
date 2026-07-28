@@ -1,0 +1,28 @@
+name: vact_sdk
+description: Dependency-free one-to-one voice and video calling for VACT. Plain HTTPS plus WebRTC.
+version: 2.1.0
+homepage: https://vact.online/docs.html
+documentation: https://vact.online/docs.html
+issue_tracker: https://vact.online/docs.html#troubleshooting
+topics:
+  - webrtc
+  - voip
+  - video-call
+  - calling
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+  flutter: ">=3.19.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_webrtc: ^1.5.2
+  http: ^1.6.0
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+  flutter_test:
+    sdk: flutter
+
+flutter:

@@ -20,8 +20,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // ─── Uncomment after running `flutterfire configure` ─────────────────────
-  await Firebase.initializeApp(options:
-   DefaultFirebaseOptions.currentPlatform);
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   // ─────────────────────────────────────────────────────────────────────────
 
   runApp(const MyApp());
@@ -46,9 +45,9 @@ class MyApp extends StatelessWidget {
         scaffoldBackgroundColor: const Color(0xFF0B0B13), // Deep rich dark
         textTheme: GoogleFonts.outfitTextTheme(
           Theme.of(context).textTheme.apply(
-                bodyColor: Colors.white,
-                displayColor: Colors.white,
-              ),
+            bodyColor: Colors.white,
+            displayColor: Colors.white,
+          ),
         ),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
