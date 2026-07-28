@@ -577,6 +577,7 @@ final class Vact {
   Future<void> _handleEvent(Map<String, dynamic> event) async {
     final type = event['type'] as String?;
     final callId = event['callId'] as String?;
+    print('DEBUG _handleEvent: type=$type, callId=$callId, active=${_calls[callId] != null}');
     if (callId == null) return;
     final active = _calls[callId];
 
@@ -600,7 +601,9 @@ final class Vact {
         break;
 
       case 'call_answered':
+      case 'call_accepted':
         final answer = event['answer'];
+        print('DEBUG: call_answered answer = $answer, active = ${active != null}');
         if (active == null || answer is! Map) return;
         await active.applyAnswer(Map<String, dynamic>.from(answer));
         break;
@@ -858,6 +861,7 @@ final class Vact {
     }
     final remoteStream = await createLocalMediaStream('vact_remote');
     peer.onTrack = (event) {
+      print('DEBUG: peer.onTrack: track ${event.track.kind}, id=${event.track.id}');
       if (event.streams.isNotEmpty) {
         for (final track in event.streams.first.getTracks()) {
           if (remoteStream.getTracks().every((current) => current.id != track.id)) {
@@ -865,7 +869,17 @@ final class Vact {
           }
         }
       } else {
-        unawaited(remoteStream.addTrack(event.track));
+        if (remoteStream.getTracks().every((current) => current.id != event.track.id)) {
+          unawaited(remoteStream.addTrack(event.track));
+        }
+      }
+    };
+    peer.onAddStream = (stream) {
+      print('DEBUG: peer.onAddStream: stream id=${stream.id}, tracks=${stream.getTracks().length}');
+      for (final track in stream.getTracks()) {
+        if (remoteStream.getTracks().every((current) => current.id != track.id)) {
+          unawaited(remoteStream.addTrack(track));
+        }
       }
     };
     final earlyCandidates = <RTCIceCandidate>[];
