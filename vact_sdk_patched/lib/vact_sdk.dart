@@ -583,6 +583,7 @@ final class Vact {
     switch (type) {
       case 'incoming_call':
         final offer = event['offer'];
+        print('DEBUG: incoming.offer = $offer');
         if (offer is! Map) return;
         _ringing[callId] = VactIncomingCall._(
           id: callId,
@@ -718,9 +719,12 @@ final class Vact {
     _PreparedPeer? prepared;
     try {
       prepared = await _preparePeer(media);
+      final sdp = incoming.offer['sdp'] as String?;
+      final type = incoming.offer['type'] as String?;
+      print('DEBUG accept: sdp length=${sdp?.length}, type=$type');
       await prepared.peer.setRemoteDescription(RTCSessionDescription(
-        incoming.offer['sdp'] as String?,
-        incoming.offer['type'] as String?,
+        _normalizeSdp(sdp),
+        type,
       ));
       final answer = await prepared.peer.createAnswer(<String, dynamic>{});
       await prepared.peer.setLocalDescription(answer);
@@ -1151,7 +1155,7 @@ final class _ActiveCall {
   Future<void> applyAnswer(Map<String, dynamic> answer) async {
     if (remoteReady) return;
     await peer.setRemoteDescription(RTCSessionDescription(
-      answer['sdp'] as String?,
+      _normalizeSdp(answer['sdp'] as String?),
       answer['type'] as String?,
     ));
     remoteReady = true;
@@ -1191,7 +1195,7 @@ final class _ActiveCall {
     if (type == 'restart_offer' && !isCaller) {
       call._setState(VactCallState.reconnecting);
       await peer.setRemoteDescription(RTCSessionDescription(
-        data['sdp'] as String?, data['type'] as String?));
+        _normalizeSdp(data['sdp'] as String?), data['type'] as String?));
       final answer = await peer.createAnswer(<String, dynamic>{});
       await peer.setLocalDescription(answer);
       await send('/v1/calls/${Uri.encodeComponent(call.id)}/restart',
@@ -1201,7 +1205,7 @@ final class _ActiveCall {
           });
     } else if (type == 'restart_answer' && isCaller) {
       await peer.setRemoteDescription(RTCSessionDescription(
-        data['sdp'] as String?, data['type'] as String?));
+        _normalizeSdp(data['sdp'] as String?), data['type'] as String?));
     }
   }
 
@@ -1283,3 +1287,24 @@ final class _PreparedPeer {
   final MediaStream remoteStream;
   final List<RTCIceCandidate> earlyCandidates;
 }
+
+String? _normalizeSdp(String? sdp) {
+  if (sdp == null) return null;
+  final lines = sdp.split(RegExp(r'\r?\n'));
+  final validLines = <String>[];
+  for (var line in lines) {
+    final trimmed = line.trim();
+    if (trimmed.isEmpty) continue;
+    if (trimmed.startsWith('a=rtpmap:')) {
+      final content = trimmed.substring('a=rtpmap:'.length).trim();
+      final spaceIndex = content.indexOf(' ');
+      if (spaceIndex == -1 || !content.substring(spaceIndex).contains('/')) {
+        print('VACT SDK: Filtering out malformed SDP line: "$trimmed"');
+        continue;
+      }
+    }
+    validLines.add(trimmed);
+  }
+  return validLines.join('\r\n') + '\r\n';
+}
+
