@@ -8,6 +8,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:vact_sdk/vact_sdk.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 import '../services/vact_service.dart';
 import '../services/call_log_service.dart';
@@ -33,7 +34,25 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
     _updatePresence('Online');
     _loadUserName();
     _requestPermissions();
+    _setupFCMToken();
     _listenForIncomingCalls();
+  }
+
+  Future<void> _setupFCMToken() async {
+    final messaging = FirebaseMessaging.instance;
+    await messaging.requestPermission();
+    final token = await messaging.getToken();
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null && token != null) {
+      try {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .update({'fcmToken': token});
+      } catch (e) {
+        debugPrint('Failed to save FCM token: $e');
+      }
+    }
   }
 
   Future<void> _loadUserName() async {

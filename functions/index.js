@@ -63,3 +63,49 @@ exports.vactToken = onCall({ secrets: [APP_SECRET] }, async (request) => {
     expiresAt: token.tokenExpiresAt,
   };
 });
+
+const { onRequest } = require('firebase-functions/v2/https');
+const { verifyVactWebhook } = require('@firstlogicmetalab/server-sdk');
+const admin = require('firebase-admin');
+
+if (!admin.apps.length) {
+  admin.initializeApp();
+}
+
+const VACT_WEBHOOK_SECRET = defineSecret('VACT_WEBHOOK_SECRET');
+
+exports.vactWebhook = onRequest({ secrets: [VACT_WEBHOOK_SECRET] }, async (req, res) => {
+  let event;
+  try {
+    event = verifyVactWebhook({
+      rawBody: req.rawBody,
+      headers: req.headers,
+      signingSecret: VACT_WEBHOOK_SECRET.value(),
+    });
+  } catch (e) {
+    return res.status(400).send('bad signature');
+  }
+
+  res.sendStatus(200);
+
+  if (event.type === 'incoming_call') {
+    const toUserId = event.data.toUserId;
+    const doc = await admin.firestore().collection('users').doc(toUserId).get();
+    if (!doc.exists) return;
+    
+    const token = doc.data().fcmToken;
+    if (!token) return;
+
+    await admin.messaging().send({
+      token: token,
+      data: {
+        callId: event.data.callId,
+        from: event.data.fromUserId,
+        callerName: event.data.callerName || event.data.fromUserId,
+        callType: event.data.callType || 'video',
+      },
+      android: { priority: 'high' },
+      apns: { headers: { 'apns-priority': '10', 'apns-push-type': 'voip' } },
+    });
+  }
+});
