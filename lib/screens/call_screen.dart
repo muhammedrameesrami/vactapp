@@ -112,7 +112,7 @@ class _CallScreenState extends State<CallScreen> {
             endreason: state == VactCallState.ended ? 'completed' : 'failed',
           );
 
-          Navigator.of(context).popUntil((route) => route.settings.name == '/home');
+          Navigator.of(context).popUntil((route) => route.isFirst);
         }
       });
 
@@ -129,10 +129,19 @@ class _CallScreenState extends State<CallScreen> {
     _remoteStreamSub?.cancel();
     _localRenderer.dispose();
     _remoteRenderer.dispose();
-    if (_state == VactCallState.ringing || _state == VactCallState.connecting) {
-      _call?.cancel();
-    } else {
-      _call?.end();
+    try {
+      final call = _call;
+      if (call != null) {
+        if (!call.isCaller) {
+          call.end();
+        } else if (_state == VactCallState.ringing || _state == VactCallState.connecting) {
+          call.cancel();
+        } else {
+          call.end();
+        }
+      }
+    } catch (e) {
+      debugPrint('Error terminating call in dispose: $e');
     }
     super.dispose();
   }
@@ -301,12 +310,20 @@ class _CallScreenState extends State<CallScreen> {
                       GestureDetector(
                         onTap: () {
                           HapticFeedback.lightImpact();
-                          if (_state == VactCallState.ringing || _state == VactCallState.connecting) {
-                            call?.cancel();
-                          } else {
-                            call?.end();
+                          try {
+                            if (call != null) {
+                              if (!call.isCaller) {
+                                call.end();
+                              } else if (_state == VactCallState.ringing || _state == VactCallState.connecting) {
+                                call.cancel();
+                              } else {
+                                call.end();
+                              }
+                            }
+                          } catch (e) {
+                            debugPrint('Error hanging up call: $e');
                           }
-                          Navigator.of(context).popUntil((route) => route.settings.name == '/home');
+                          Navigator.of(context).popUntil((route) => route.isFirst);
                         },
                         child: Container(
                           width: 60,

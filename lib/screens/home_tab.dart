@@ -98,29 +98,35 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
   bool _callHandled = false;
 
   void _listenForIncomingCalls() {
-    _incomingSub = VactService.instance.vact.incomingCalls().listen((calls) {
+    _incomingSub = VactService.instance.vact.incomingCalls().listen((
+      calls,
+    ) async {
       if (!mounted) return;
 
-      final isLastIncomingStillRinging = _lastIncoming != null && calls.any((c) => c.id == _lastIncoming!.id);
-      print("DEBUG: incomingCalls stream update. _lastIncoming: ${_lastIncoming?.id}, isStillRinging: $isLastIncomingStillRinging, _incomingCallRoute: $_incomingCallRoute");
-      
+      final isLastIncomingStillRinging =
+          _lastIncoming != null && calls.any((c) => c.id == _lastIncoming!.id);
+      print(
+        "DEBUG: incomingCalls stream update. _lastIncoming: ${_lastIncoming?.id}, isStillRinging: $isLastIncomingStillRinging, _incomingCallRoute: $_incomingCallRoute",
+      );
+
       if (_lastIncoming != null && !isLastIncomingStillRinging) {
         print("DEBUG: Call ended by caller. Dismissing incoming call route.");
-        if (_incomingCallRoute != null) {
-          final isCurrent = _incomingCallRoute!.isCurrent;
-          print("DEBUG: _incomingCallRoute isCurrent: $isCurrent");
-          if (isCurrent) {
-            print("DEBUG: Calling Navigator.pop()");
-            Navigator.of(context).pop();
-          } else {
-            print("DEBUG: Calling Navigator.removeRoute()");
-            Navigator.of(context).removeRoute(_incomingCallRoute!);
-          }
-          _incomingCallRoute = null;
-        } else {
-          print("DEBUG: _incomingCallRoute is null, cannot dismiss!");
-        }
         if (!_callHandled) {
+          if (_incomingCallRoute != null) {
+            final isCurrent = _incomingCallRoute!.isCurrent;
+            print("DEBUG: _incomingCallRoute isCurrent: $isCurrent");
+            if (isCurrent) {
+              print("DEBUG: Calling Navigator.pop()");
+              Navigator.of(context).pop();
+            } else {
+              print("DEBUG: Calling Navigator.removeRoute()");
+              Navigator.of(context).removeRoute(_incomingCallRoute!);
+            }
+            _incomingCallRoute = null;
+          } else {
+            print("DEBUG: _incomingCallRoute is null, cannot dismiss!");
+          }
+
           final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
           CallLogService.saveCallLog(
             callerUid: _lastIncoming!.fromUserId,
@@ -137,7 +143,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
         }
         _lastIncoming = null;
       }
-      
+
       if (calls.isEmpty) return;
 
       if (_incomingCallRoute == null) {
@@ -156,13 +162,31 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
         _lastIncoming = incomingCall;
         _callHandled = false;
 
-        final isBackground = WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed;
+        final isBackground =
+            WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed;
 
         if (isBackground) {
           // The app is running but minimized. Show system CallKit instead of in-app overlay.
+          String callerName = incomingCall.callerName;
+          if (callerName.isEmpty || callerName == incomingCall.fromUserId) {
+            try {
+              final doc = await FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(incomingCall.fromUserId)
+                  .get();
+              if (doc.exists && doc.data() != null) {
+                callerName = doc.data()!['name'] ?? incomingCall.fromUserId;
+              } else {
+                callerName = incomingCall.fromUserId;
+              }
+            } catch (_) {
+              callerName = incomingCall.fromUserId;
+            }
+          }
+
           final params = CallKitParams(
             id: incomingCall.id,
-            nameCaller: incomingCall.callerName.isNotEmpty ? incomingCall.callerName : incomingCall.fromUserId,
+            nameCaller: callerName,
             appName: 'VactOnline',
             type: incomingCall.type == VactCallType.video ? 1 : 0,
             duration: 30000,
@@ -174,10 +198,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
               backgroundColor: '#0F0F1A',
               actionColor: '#4CAF50',
             ),
-            ios: const IOSParams(
-              iconName: 'CallKitIcon',
-              supportsVideo: true,
-            ),
+            ios: const IOSParams(iconName: 'CallKitIcon', supportsVideo: true),
           );
           FlutterCallkitIncoming.showCallkitIncoming(params);
         } else {
@@ -209,15 +230,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
         video: true,
       );
       if (!mounted) return;
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          fullscreenDialog: true,
-          builder: (_) => _OutgoingCallOverlay(
-            call: call,
-            targetUserId: targetUserId,
-          ),
-        ),
-      );
+      await Navigator.of(context).pushNamed('/call', arguments: call);
       await _updatePresence('Online');
     } on VactException catch (e) {
       HapticFeedback.heavyImpact();
@@ -487,66 +500,66 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
                               ),
                             ),
                           ),
-                        trailing:   GestureDetector(
-                                  onTap: () => _placeCall(contactUid),
-                                  child: Container(
-                                    padding: const EdgeInsets.all(12),
-                                    decoration: BoxDecoration(
-                                      gradient: const LinearGradient(
-                                        colors: [
-                                          Color(0xFF8A2BE2),
-                                          Color(0xFF00E5FF),
-                                        ],
-                                      ),
-                                      borderRadius: BorderRadius.circular(16),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: const Color(
-                                            0xFF8A2BE2,
-                                          ).withValues(alpha: 0.4),
-                                          blurRadius: 12,
-                                          offset: const Offset(0, 4),
-                                        ),
-                                      ],
-                                    ),
-                                    child: const Icon(
-                                      Icons.videocam,
-                                      color: Colors.white,
-                                      size: 22,
-                                    ),
-                                  ),
+                          trailing: GestureDetector(
+                            onTap: () => _placeCall(contactUid),
+                            child: Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [
+                                    Color(0xFF8A2BE2),
+                                    Color(0xFF00E5FF),
+                                  ],
                                 ),
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(
+                                      0xFF8A2BE2,
+                                    ).withValues(alpha: 0.4),
+                                    blurRadius: 12,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                              ),
+                              child: const Icon(
+                                Icons.videocam,
+                                color: Colors.white,
+                                size: 22,
+                              ),
+                            ),
+                          ),
                           // trailing: status == 'Online'
-                              // ? GestureDetector(
-                              //     onTap: () => _placeCall(contactUid),
-                              //     child: Container(
-                              //       padding: const EdgeInsets.all(12),
-                              //       decoration: BoxDecoration(
-                              //         gradient: const LinearGradient(
-                              //           colors: [
-                              //             Color(0xFF8A2BE2),
-                              //             Color(0xFF00E5FF),
-                              //           ],
-                              //         ),
-                              //         borderRadius: BorderRadius.circular(16),
-                              //         boxShadow: [
-                              //           BoxShadow(
-                              //             color: const Color(
-                              //               0xFF8A2BE2,
-                              //             ).withValues(alpha: 0.4),
-                              //             blurRadius: 12,
-                              //             offset: const Offset(0, 4),
-                              //           ),
-                              //         ],
-                              //       ),
-                              //       child: const Icon(
-                              //         Icons.videocam,
-                              //         color: Colors.white,
-                              //         size: 22,
-                              //       ),
-                              //     ),
-                              //   )
-                              // : const SizedBox(width: 48, height: 48),
+                          // ? GestureDetector(
+                          //     onTap: () => _placeCall(contactUid),
+                          //     child: Container(
+                          //       padding: const EdgeInsets.all(12),
+                          //       decoration: BoxDecoration(
+                          //         gradient: const LinearGradient(
+                          //           colors: [
+                          //             Color(0xFF8A2BE2),
+                          //             Color(0xFF00E5FF),
+                          //           ],
+                          //         ),
+                          //         borderRadius: BorderRadius.circular(16),
+                          //         boxShadow: [
+                          //           BoxShadow(
+                          //             color: const Color(
+                          //               0xFF8A2BE2,
+                          //             ).withValues(alpha: 0.4),
+                          //             blurRadius: 12,
+                          //             offset: const Offset(0, 4),
+                          //           ),
+                          //         ],
+                          //       ),
+                          //       child: const Icon(
+                          //         Icons.videocam,
+                          //         color: Colors.white,
+                          //         size: 22,
+                          //       ),
+                          //     ),
+                          //   )
+                          // : const SizedBox(width: 48, height: 48),
                         ),
                       );
                     },
@@ -616,9 +629,7 @@ class _IncomingCallOverlayState extends State<_IncomingCallOverlay> {
       widget.onHandled();
       final call = await widget.vact.accept(widget.incoming);
       if (!context.mounted) return;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => _CallScreenWrapper(call: call)),
-      );
+      Navigator.of(context).pushReplacementNamed('/call', arguments: call);
     } catch (e) {
       HapticFeedback.heavyImpact();
       if (!context.mounted) return;
@@ -808,182 +819,6 @@ class _IncomingCallOverlayState extends State<_IncomingCallOverlay> {
                         ],
                       ),
                     ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CallScreenWrapper extends StatelessWidget {
-  const _CallScreenWrapper({required this.call});
-  final VactCall call;
-
-  @override
-  Widget build(BuildContext context) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      Navigator.of(context).pushReplacementNamed('/call', arguments: call);
-    });
-    return const Scaffold(body: Center(child: CircularProgressIndicator()));
-  }
-}
-
-class _OutgoingCallOverlay extends StatefulWidget {
-  const _OutgoingCallOverlay({
-    required this.call,
-    required this.targetUserId,
-  });
-  final VactCall call;
-  final String targetUserId;
-
-  @override
-  State<_OutgoingCallOverlay> createState() => _OutgoingCallOverlayState();
-}
-
-class _OutgoingCallOverlayState extends State<_OutgoingCallOverlay> {
-  String _calleeName = '';
-  late StreamSubscription<VactCallState> _stateSub;
-  bool _navigated = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _fetchCalleeName();
-    _stateSub = widget.call.states.listen((state) {
-      if (!mounted) return;
-      if (state == VactCallState.connected) {
-        if (!_navigated) {
-          _navigated = true;
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => _CallScreenWrapper(call: widget.call)),
-          );
-        }
-      } else if (state == VactCallState.failed || state == VactCallState.ended) {
-        if (!_navigated) {
-          _navigated = true;
-          Navigator.of(context).pop();
-        }
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _stateSub.cancel();
-    super.dispose();
-  }
-
-  Future<void> _fetchCalleeName() async {
-    try {
-      final doc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(widget.targetUserId)
-          .get();
-      if (doc.exists && mounted) {
-        setState(() {
-          _calleeName = doc.data()?['name'] ?? 'Unknown';
-        });
-      } else {
-        if (mounted) setState(() => _calleeName = 'Unknown');
-      }
-    } catch (e) {
-      if (mounted) setState(() => _calleeName = 'Unknown');
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
-              child: Container(color: Colors.black.withValues(alpha: 0.6)),
-            ),
-          ),
-          SafeArea(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Spacer(),
-                Center(
-                  child: Container(
-                    width: 120,
-                    height: 120,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF00C9B1), Color(0xFF6C63FF)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF00C9B1).withValues(alpha: 0.4),
-                          blurRadius: 32,
-                          spreadRadius: 8,
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.person,
-                      size: 60,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  _calleeName.isEmpty ? 'Calling...' : 'Calling $_calleeName...',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 30,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Ringing',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.white70,
-                  ),
-                ),
-                const Spacer(),
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 60.0),
-                  child: Center(
-                    child: GestureDetector(
-                      onTap: () {
-                        widget.call.cancel();
-                      },
-                      child: Container(
-                        width: 72,
-                        height: 72,
-                        decoration: BoxDecoration(
-                          color: Colors.red,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.red.withValues(alpha: 0.4),
-                              blurRadius: 20,
-                              spreadRadius: 4,
-                            ),
-                          ],
-                        ),
-                        child: const Icon(Icons.call_end,
-                            size: 36, color: Colors.white),
-                      ),
-                    ),
                   ),
                 ),
               ],

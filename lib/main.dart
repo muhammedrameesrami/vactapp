@@ -135,7 +135,7 @@ class _MyAppState extends State<MyApp> {
               if (incomingCallList.isNotEmpty) {
                 final incomingCall = incomingCallList.firstWhere((c) => c.id == callId);
                 final call = await vact.accept(incomingCall);
-                navigatorKey.currentState?.pushReplacementNamed('/call', arguments: call);
+                navigatorKey.currentState?.pushNamed('/call', arguments: call);
               }
             } catch (e) {
               debugPrint('Failed to accept callkit call: $e');
@@ -143,6 +143,7 @@ class _MyAppState extends State<MyApp> {
           }
           break;
         case CallEventActionCallDecline():
+          final callId = event.callKitParams.id;
           final fromUserId = event.callKitParams.extra?['userId'] as String?;
           final currentUid = FirebaseAuth.instance.currentUser?.uid;
           if (currentUid != null && fromUserId != null) {
@@ -156,6 +157,20 @@ class _MyAppState extends State<MyApp> {
               duration: 0,
               endreason: 'declined',
             );
+            try {
+              await VactService.instance.connect();
+              final vact = VactService.instance.vact;
+              final incomingCallList = await vact.incomingCalls().firstWhere(
+                (calls) => calls.any((c) => c.id == callId), 
+                orElse: () => <VactIncomingCall>[]
+              );
+              if (incomingCallList.isNotEmpty) {
+                final incomingCall = incomingCallList.firstWhere((c) => c.id == callId);
+                await vact.decline(incomingCall);
+              }
+            } catch (e) {
+              debugPrint('Failed to decline callkit call: $e');
+            }
           }
           break;
         default:
