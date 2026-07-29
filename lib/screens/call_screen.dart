@@ -22,6 +22,7 @@ class _CallScreenState extends State<CallScreen> {
   final _localRenderer = RTCVideoRenderer();
   final _remoteRenderer = RTCVideoRenderer();
   late final StreamSubscription<VactCallState> _stateSub;
+  StreamSubscription<MediaStream>? _remoteStreamSub;
 
   bool _muted = false;
   bool _cameraOn = true;
@@ -76,6 +77,13 @@ class _CallScreenState extends State<CallScreen> {
         }
       });
 
+      _remoteStreamSub = call.onRemoteStream.listen((stream) {
+        if (!mounted) return;
+        setState(() {
+          _remoteRenderer.srcObject = stream;
+        });
+      });
+
       _stateSub = call.states.listen((state) {
         if (!mounted) return;
         setState(() => _state = state);
@@ -118,9 +126,14 @@ class _CallScreenState extends State<CallScreen> {
   void dispose() {
     _timer?.cancel();
     _stateSub.cancel();
+    _remoteStreamSub?.cancel();
     _localRenderer.dispose();
     _remoteRenderer.dispose();
-    _call?.end(); // Safe to call multiple times
+    if (_state == VactCallState.ringing || _state == VactCallState.connecting) {
+      _call?.cancel();
+    } else {
+      _call?.end();
+    }
     super.dispose();
   }
 
@@ -288,7 +301,11 @@ class _CallScreenState extends State<CallScreen> {
                       GestureDetector(
                         onTap: () {
                           HapticFeedback.lightImpact();
-                          call?.end();
+                          if (_state == VactCallState.ringing || _state == VactCallState.connecting) {
+                            call?.cancel();
+                          } else {
+                            call?.end();
+                          }
                           Navigator.of(context).popUntil((route) => route.settings.name == '/home');
                         },
                         child: Container(

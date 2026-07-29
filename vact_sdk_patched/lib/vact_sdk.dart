@@ -106,7 +106,7 @@ final class VactCall {
     required this.type,
     required this.isCaller,
     required this.localStream,
-    required this.remoteStream,
+    this.remoteStream,
     required RTCPeerConnection peer,
     required Future<void> Function(String action, Map<String, dynamic> body)
         action,
@@ -115,14 +115,25 @@ final class VactCall {
   })  : _peer = peer,
         _action = action,
         _restart = restart,
-        _disposeCallback = disposeCallback;
+        _disposeCallback = disposeCallback {
+    _peer.onAddStream = (stream) {
+      remoteStream = stream;
+      _onRemoteStreamController.add(stream);
+    };
+    _peer.onTrack = (event) {
+      if (event.streams.isNotEmpty) {
+        remoteStream = event.streams.first;
+        _onRemoteStreamController.add(event.streams.first);
+      }
+    };
+  }
 
   final String id;
   final String otherUserId;
   final VactCallType type;
   final bool isCaller;
   final MediaStream localStream;
-  final MediaStream remoteStream;
+  MediaStream? remoteStream;
 
   final RTCPeerConnection _peer;
   final Future<void> Function(String action, Map<String, dynamic> body) _action;
@@ -142,6 +153,9 @@ final class VactCall {
 
   VactCallState get state => _state;
   Stream<VactCallState> get states => _states.stream;
+
+  final StreamController<MediaStream> _onRemoteStreamController = StreamController<MediaStream>.broadcast();
+  Stream<MediaStream> get onRemoteStream => _onRemoteStreamController.stream;
 
   /// Periodic quality samples while connected, roughly every two seconds.
   Stream<VactCallStats> get stats => _stats.stream;
@@ -365,7 +379,7 @@ final class VactCall {
       await track.stop();
     }
     await localStream.dispose();
-    await remoteStream.dispose();
+    await remoteStream?.dispose();
     await _peer.close();
     await _states.close();
     await _stats.close();

@@ -78,17 +78,33 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
   void _listenForIncomingCalls() {
     _incomingSub = VactService.instance.vact.incomingCalls().listen((calls) {
       if (!mounted) return;
+
+      final isLastIncomingStillRinging = _lastIncoming != null && calls.any((c) => c.id == _lastIncoming!.id);
+      print("DEBUG: incomingCalls stream update. _lastIncoming: ${_lastIncoming?.id}, isStillRinging: $isLastIncomingStillRinging, _incomingCallRoute: $_incomingCallRoute");
       
-      if (calls.isEmpty) {
+      if (_lastIncoming != null && !isLastIncomingStillRinging) {
+        print("DEBUG: Call ended by caller. Dismissing incoming call route.");
         if (_incomingCallRoute != null) {
-          Navigator.of(context).removeRoute(_incomingCallRoute!);
+          final isCurrent = _incomingCallRoute!.isCurrent;
+          print("DEBUG: _incomingCallRoute isCurrent: $isCurrent");
+          if (isCurrent) {
+            print("DEBUG: Calling Navigator.pop()");
+            Navigator.of(context).pop();
+          } else {
+            print("DEBUG: Calling Navigator.removeRoute()");
+            Navigator.of(context).removeRoute(_incomingCallRoute!);
+          }
           _incomingCallRoute = null;
+        } else {
+          print("DEBUG: _incomingCallRoute is null, cannot dismiss!");
         }
-        if (_lastIncoming != null && !_callHandled) {
+        if (!_callHandled) {
           final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
           CallLogService.saveCallLog(
             callerUid: _lastIncoming!.fromUserId,
-            callerName: _lastIncoming!.callerName.isNotEmpty ? _lastIncoming!.callerName : _lastIncoming!.fromUserId,
+            callerName: _lastIncoming!.callerName.isNotEmpty
+                ? _lastIncoming!.callerName
+                : _lastIncoming!.fromUserId,
             calleeUid: currentUid,
             calleeName: 'Me',
             type: _lastIncoming!.type == VactCallType.video ? 'video' : 'audio',
@@ -98,8 +114,9 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
           );
         }
         _lastIncoming = null;
-        return;
       }
+      
+      if (calls.isEmpty) return;
 
       if (_incomingCallRoute == null) {
         VactIncomingCall? incoming;
@@ -109,14 +126,14 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
             break;
           }
         }
-        
+
         if (incoming == null) return;
 
         final incomingCall = incoming;
         _shownCallIds.add(incomingCall.id);
         _lastIncoming = incomingCall;
         _callHandled = false;
-        
+
         _incomingCallRoute = MaterialPageRoute(
           fullscreenDialog: true,
           builder: (_) => _IncomingCallOverlay(
@@ -215,7 +232,10 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
                       ),
                       Text(
                         user?.email ?? '',
-                        style: const TextStyle(fontSize: 12, color: Colors.white54),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.white54,
+                        ),
                       ),
                     ],
                   ),
@@ -231,7 +251,8 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
                 color: const Color(0xFF00E5FF).withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                    color: const Color(0xFF00E5FF).withValues(alpha: 0.3)),
+                  color: const Color(0xFF00E5FF).withValues(alpha: 0.3),
+                ),
               ),
               child: Row(
                 children: [
@@ -267,34 +288,39 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return const Center(
-                        child: CircularProgressIndicator(
-                            color: Color(0xFF8A2BE2)));
+                      child: CircularProgressIndicator(
+                        color: Color(0xFF8A2BE2),
+                      ),
+                    );
                   }
                   if (snapshot.hasError) {
                     return const Center(
-                      child: Text('Error loading users',
-                          style: TextStyle(color: Colors.white54)),
+                      child: Text(
+                        'Error loading users',
+                        style: TextStyle(color: Colors.white54),
+                      ),
                     );
                   }
 
                   final docs = snapshot.data?.docs ?? [];
                   if (docs.isEmpty) {
                     return const Center(
-                      child: Text('No other users found',
-                          style:
-                              TextStyle(color: Colors.white54, fontSize: 16)),
+                      child: Text(
+                        'No other users found',
+                        style: TextStyle(color: Colors.white54, fontSize: 16),
+                      ),
                     );
                   }
 
                   return ListView.builder(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
                     itemCount: docs.length,
                     itemBuilder: (context, index) {
-                      final data =
-                          docs[index].data() as Map<String, dynamic>;
-                      final contactName =
-                          data['name'] as String? ?? 'Unknown';
+                      final data = docs[index].data() as Map<String, dynamic>;
+                      final contactName = data['name'] as String? ?? 'Unknown';
                       final contactUid = data['uid'] as String;
                       final status = data['status'] as String? ?? 'Offline';
 
@@ -307,14 +333,17 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
                                   topLeft: Radius.circular(40),
                                   bottomRight: Radius.circular(40),
                                   topRight: Radius.circular(10),
-                                  bottomLeft: Radius.circular(10))
+                                  bottomLeft: Radius.circular(10),
+                                )
                               : const BorderRadius.only(
                                   topRight: Radius.circular(40),
                                   bottomLeft: Radius.circular(40),
                                   topLeft: Radius.circular(10),
-                                  bottomRight: Radius.circular(10)),
+                                  bottomRight: Radius.circular(10),
+                                ),
                           border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.1)),
+                            color: Colors.white.withValues(alpha: 0.1),
+                          ),
                           boxShadow: [
                             BoxShadow(
                               color: Colors.black.withValues(alpha: 0.1),
@@ -325,7 +354,9 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
                         ),
                         child: ListTile(
                           contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 12),
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
                           leading: Stack(
                             children: [
                               Container(
@@ -336,15 +367,16 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
                                   gradient: const LinearGradient(
                                     colors: [
                                       Color(0xFF8A2BE2),
-                                      Color(0xFF00E5FF)
+                                      Color(0xFF00E5FF),
                                     ],
                                     begin: Alignment.topLeft,
                                     end: Alignment.bottomRight,
                                   ),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: const Color(0xFF8A2BE2)
-                                          .withValues(alpha: 0.4),
+                                      color: const Color(
+                                        0xFF8A2BE2,
+                                      ).withValues(alpha: 0.4),
                                       blurRadius: 12,
                                     ),
                                   ],
@@ -371,8 +403,9 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
                                     color: _statusColor(status),
                                     shape: BoxShape.circle,
                                     border: Border.all(
-                                        color: const Color(0xFF141421),
-                                        width: 2),
+                                      color: const Color(0xFF141421),
+                                      width: 2,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -381,9 +414,10 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
                           title: Text(
                             contactName,
                             style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                                letterSpacing: -0.3),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                              letterSpacing: -0.3,
+                            ),
                           ),
                           subtitle: Padding(
                             padding: const EdgeInsets.only(top: 4.0),
@@ -405,21 +439,25 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
                                       gradient: const LinearGradient(
                                         colors: [
                                           Color(0xFF8A2BE2),
-                                          Color(0xFF00E5FF)
+                                          Color(0xFF00E5FF),
                                         ],
                                       ),
                                       borderRadius: BorderRadius.circular(16),
                                       boxShadow: [
                                         BoxShadow(
-                                          color: const Color(0xFF8A2BE2)
-                                              .withValues(alpha: 0.4),
+                                          color: const Color(
+                                            0xFF8A2BE2,
+                                          ).withValues(alpha: 0.4),
                                           blurRadius: 12,
                                           offset: const Offset(0, 4),
                                         ),
                                       ],
                                     ),
-                                    child: const Icon(Icons.videocam,
-                                        color: Colors.white, size: 22),
+                                    child: const Icon(
+                                      Icons.videocam,
+                                      color: Colors.white,
+                                      size: 22,
+                                    ),
                                   ),
                                 )
                               : const SizedBox(width: 48, height: 48),
@@ -440,7 +478,11 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
 // ─── Incoming call overlay ───────────────────────────────────────────────────
 
 class _IncomingCallOverlay extends StatefulWidget {
-  const _IncomingCallOverlay({required this.incoming, required this.vact, required this.onHandled});
+  const _IncomingCallOverlay({
+    required this.incoming,
+    required this.vact,
+    required this.onHandled,
+  });
   final VactIncomingCall incoming;
   final Vact vact;
   final VoidCallback onHandled;
@@ -459,11 +501,12 @@ class _IncomingCallOverlayState extends State<_IncomingCallOverlay> {
   }
 
   Future<void> _fetchCallerName() async {
-    if (widget.incoming.callerName.isNotEmpty && widget.incoming.callerName != widget.incoming.fromUserId) {
+    if (widget.incoming.callerName.isNotEmpty &&
+        widget.incoming.callerName != widget.incoming.fromUserId) {
       if (mounted) setState(() => _callerName = widget.incoming.callerName);
       return;
     }
-    
+
     try {
       final doc = await FirebaseFirestore.instance
           .collection('users')
@@ -538,8 +581,11 @@ class _IncomingCallOverlayState extends State<_IncomingCallOverlay> {
                         ),
                       ],
                     ),
-                    child:
-                        const Icon(Icons.person, size: 60, color: Colors.white),
+                    child: const Icon(
+                      Icons.person,
+                      size: 60,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -547,19 +593,22 @@ class _IncomingCallOverlayState extends State<_IncomingCallOverlay> {
                   _callerName.isEmpty ? 'Loading...' : _callerName,
                   textAlign: TextAlign.center,
                   style: const TextStyle(
-                      fontSize: 30, fontWeight: FontWeight.bold),
+                    fontSize: 30,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   isVideo ? 'Incoming Video Call' : 'Incoming Call',
                   textAlign: TextAlign.center,
-                  style:
-                      const TextStyle(color: Colors.white54, fontSize: 16),
+                  style: const TextStyle(color: Colors.white54, fontSize: 16),
                 ),
                 const Spacer(),
                 Padding(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 60, vertical: 40),
+                    horizontal: 60,
+                    vertical: 40,
+                  ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
@@ -570,22 +619,28 @@ class _IncomingCallOverlayState extends State<_IncomingCallOverlay> {
                               HapticFeedback.lightImpact();
                               try {
                                 try {
-                                widget.onHandled();
-                                final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
-                                CallLogService.saveCallLog(
-                                  callerUid: widget.incoming.fromUserId,
-                                  callerName: _callerName,
-                                  calleeUid: currentUid,
-                                  calleeName: 'Me',
-                                  type: widget.incoming.type == VactCallType.video ? 'video' : 'audio',
-                                  status: 'declined',
-                                  duration: 0,
-                                  endreason: 'declined',
-                                );
-                                await widget.vact.decline(widget.incoming);
-                              } on VactException catch (e) {
-                                debugPrint('Error declining call: $e');
-                              }
+                                  widget.onHandled();
+                                  final currentUid =
+                                      FirebaseAuth.instance.currentUser?.uid ??
+                                      '';
+                                  CallLogService.saveCallLog(
+                                    callerUid: widget.incoming.fromUserId,
+                                    callerName: _callerName,
+                                    calleeUid: currentUid,
+                                    calleeName: 'Me',
+                                    type:
+                                        widget.incoming.type ==
+                                            VactCallType.video
+                                        ? 'video'
+                                        : 'audio',
+                                    status: 'declined',
+                                    duration: 0,
+                                    endreason: 'declined',
+                                  );
+                                  await widget.vact.decline(widget.incoming);
+                                } on VactException catch (e) {
+                                  debugPrint('Error declining call: $e');
+                                }
                               } catch (_) {}
                               if (context.mounted) {
                                 Navigator.of(context).pop();
@@ -599,22 +654,29 @@ class _IncomingCallOverlayState extends State<_IncomingCallOverlay> {
                                 shape: BoxShape.circle,
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.redAccent
-                                        .withValues(alpha: 0.5),
+                                    color: Colors.redAccent.withValues(
+                                      alpha: 0.5,
+                                    ),
                                     blurRadius: 24,
                                     spreadRadius: 4,
                                   ),
                                 ],
                               ),
-                              child: const Icon(Icons.call_end,
-                                  size: 32, color: Colors.white),
+                              child: const Icon(
+                                Icons.call_end,
+                                size: 32,
+                                color: Colors.white,
+                              ),
                             ),
                           ),
                           const SizedBox(height: 12),
-                          const Text('Decline',
-                              style: TextStyle(
-                                  color: Colors.white70,
-                                  fontWeight: FontWeight.bold)),
+                          const Text(
+                            'Decline',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ],
                       ),
                       Column(
@@ -626,13 +688,17 @@ class _IncomingCallOverlayState extends State<_IncomingCallOverlay> {
                               height: 72,
                               decoration: BoxDecoration(
                                 gradient: const LinearGradient(
-                                  colors: [Color(0xFF8A2BE2), Color(0xFF00E5FF)],
+                                  colors: [
+                                    Color(0xFF8A2BE2),
+                                    Color(0xFF00E5FF),
+                                  ],
                                 ),
                                 shape: BoxShape.circle,
                                 boxShadow: [
                                   BoxShadow(
-                                    color: const Color(0xFF00E5FF)
-                                        .withValues(alpha: 0.5),
+                                    color: const Color(
+                                      0xFF00E5FF,
+                                    ).withValues(alpha: 0.5),
                                     blurRadius: 24,
                                     spreadRadius: 4,
                                   ),
@@ -646,10 +712,13 @@ class _IncomingCallOverlayState extends State<_IncomingCallOverlay> {
                             ),
                           ),
                           const SizedBox(height: 12),
-                          const Text('Accept',
-                              style: TextStyle(
-                                  color: Colors.white70,
-                                  fontWeight: FontWeight.bold)),
+                          const Text(
+                            'Accept',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ],
                       ),
                     ],
@@ -673,8 +742,6 @@ class _CallScreenWrapper extends StatelessWidget {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Navigator.of(context).pushReplacementNamed('/call', arguments: call);
     });
-    return const Scaffold(
-      body: Center(child: CircularProgressIndicator()),
-    );
+    return const Scaffold(body: Center(child: CircularProgressIndicator()));
   }
 }
