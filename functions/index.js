@@ -74,7 +74,7 @@ if (!admin.apps.length) {
 
 const VACT_WEBHOOK_SECRET = defineSecret('VACT_WEBHOOK_SECRET');
 
-exports.vactWebhook = onRequest({ secrets: [VACT_WEBHOOK_SECRET] }, async (req, res) => {
+exports.vactWebhook = onRequest({ secrets: [VACT_WEBHOOK_SECRET], invoker: 'public' }, async (req, res) => {
   let event;
   try {
     event = verifyVactWebhook({
@@ -93,7 +93,7 @@ exports.vactWebhook = onRequest({ secrets: [VACT_WEBHOOK_SECRET] }, async (req, 
     const doc = await admin.firestore().collection('users').doc(toUserId).get();
     if (!doc.exists) return;
     
-    const token = doc.data().fcmToken;
+    const token = doc.data().fcmTokens;
     if (!token) return;
 
     await admin.messaging().send({

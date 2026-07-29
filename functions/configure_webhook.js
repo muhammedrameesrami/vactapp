@@ -5,7 +5,7 @@ const APP_ID = 'vact_app_fe30b4770cb22e7f646a459e';
 const APP_SECRET = 'vact_live_62908fe303459cf5_KAcgzYQe8sk9AJZfKCXQJYr4SNHQQJLstNk2IrjJqqw';
 
 // The URL of your deployed Firebase Function
-const WEBHOOK_URL = 'https://us-central1-mitco-task.cloudfunctions.net/vactWebhook';
+const WEBHOOK_URL = 'https://vactwebhook-ddah2cvm6q-uc.a.run.app';
 
 async function configure() {
   console.log(`Configuring webhook for ${APP_ID}...`);

@@ -10,6 +10,9 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:vact_sdk/vact_sdk.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
+import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
+import 'package:flutter_callkit_incoming/entities/entities.dart';
+
 import '../services/vact_service.dart';
 import '../services/call_log_service.dart';
 
@@ -153,19 +156,46 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
         _lastIncoming = incomingCall;
         _callHandled = false;
 
-        _incomingCallRoute = MaterialPageRoute(
-          fullscreenDialog: true,
-          builder: (_) => _IncomingCallOverlay(
-            incoming: incomingCall,
-            vact: VactService.instance.vact,
-            onHandled: () {
-              _callHandled = true;
-            },
-          ),
-        );
-        Navigator.of(context).push(_incomingCallRoute!).then((_) {
-          _incomingCallRoute = null;
-        });
+        final isBackground = WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed;
+
+        if (isBackground) {
+          // The app is running but minimized. Show system CallKit instead of in-app overlay.
+          final params = CallKitParams(
+            id: incomingCall.id,
+            nameCaller: incomingCall.callerName.isNotEmpty ? incomingCall.callerName : incomingCall.fromUserId,
+            appName: 'VactOnline',
+            type: incomingCall.type == VactCallType.video ? 1 : 0,
+            duration: 30000,
+            extra: <String, dynamic>{'userId': incomingCall.fromUserId},
+            android: const AndroidParams(
+              isCustomNotification: true,
+              isShowLogo: false,
+              ringtonePath: 'system_ringtone_default',
+              backgroundColor: '#0F0F1A',
+              actionColor: '#4CAF50',
+            ),
+            ios: const IOSParams(
+              iconName: 'CallKitIcon',
+              supportsVideo: true,
+            ),
+          );
+          FlutterCallkitIncoming.showCallkitIncoming(params);
+        } else {
+          // App is in foreground, show overlay
+          _incomingCallRoute = MaterialPageRoute(
+            fullscreenDialog: true,
+            builder: (_) => _IncomingCallOverlay(
+              incoming: incomingCall,
+              vact: VactService.instance.vact,
+              onHandled: () {
+                _callHandled = true;
+              },
+            ),
+          );
+          Navigator.of(context).push(_incomingCallRoute!).then((_) {
+            _incomingCallRoute = null;
+          });
+        }
       }
     });
   }
