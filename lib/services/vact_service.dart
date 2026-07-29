@@ -13,8 +13,10 @@ class VactService {
 
   Vact? _vactInstance;
   bool _initialized = false;
+  List<VactIncomingCall> _latestIncomingCalls = [];
 
   Vact get vact => _vactInstance!;
+  List<VactIncomingCall> get latestIncomingCalls => _latestIncomingCalls;
 
   /// Call once after Firebase Auth sign-in. Fetches a one-time token
   /// from the Firebase Cloud Function and connects to VACT.
@@ -42,6 +44,10 @@ class VactService {
       }
     });
 
+    _vactInstance!.incomingCalls().listen((calls) {
+      _latestIncomingCalls = calls;
+    });
+
     _initialized = true;
   }
 
@@ -50,6 +56,7 @@ class VactService {
     if (!_initialized) return;
     await _vactInstance?.dispose();
     _vactInstance = null; // ← must null this out so connect() creates a fresh instance next login
+    _latestIncomingCalls = [];
     _initialized = false;
   }
 }

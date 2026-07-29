@@ -163,7 +163,9 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
         _callHandled = false;
 
         final isBackground =
-            WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed;
+            WidgetsBinding.instance.lifecycleState == AppLifecycleState.paused ||
+            WidgetsBinding.instance.lifecycleState == AppLifecycleState.detached ||
+            WidgetsBinding.instance.lifecycleState == AppLifecycleState.hidden;
 
         if (isBackground) {
           // The app is running but minimized. Show system CallKit instead of in-app overlay.
@@ -500,66 +502,66 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
                               ),
                             ),
                           ),
-                          trailing: GestureDetector(
-                            onTap: () => _placeCall(contactUid),
-                            child: Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                gradient: const LinearGradient(
-                                  colors: [
-                                    Color(0xFF8A2BE2),
-                                    Color(0xFF00E5FF),
-                                  ],
-                                ),
-                                borderRadius: BorderRadius.circular(16),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: const Color(
-                                      0xFF8A2BE2,
-                                    ).withValues(alpha: 0.4),
-                                    blurRadius: 12,
-                                    offset: const Offset(0, 4),
-                                  ),
-                                ],
-                              ),
-                              child: const Icon(
-                                Icons.videocam,
-                                color: Colors.white,
-                                size: 22,
-                              ),
-                            ),
-                          ),
-                          // trailing: status == 'Online'
-                          // ? GestureDetector(
-                          //     onTap: () => _placeCall(contactUid),
-                          //     child: Container(
-                          //       padding: const EdgeInsets.all(12),
-                          //       decoration: BoxDecoration(
-                          //         gradient: const LinearGradient(
-                          //           colors: [
-                          //             Color(0xFF8A2BE2),
-                          //             Color(0xFF00E5FF),
-                          //           ],
-                          //         ),
-                          //         borderRadius: BorderRadius.circular(16),
-                          //         boxShadow: [
-                          //           BoxShadow(
-                          //             color: const Color(
-                          //               0xFF8A2BE2,
-                          //             ).withValues(alpha: 0.4),
-                          //             blurRadius: 12,
-                          //             offset: const Offset(0, 4),
-                          //           ),
+                          // trailing: GestureDetector(
+                          //   onTap: () => _placeCall(contactUid),
+                          //   child: Container(
+                          //     padding: const EdgeInsets.all(12),
+                          //     decoration: BoxDecoration(
+                          //       gradient: const LinearGradient(
+                          //         colors: [
+                          //           Color(0xFF8A2BE2),
+                          //           Color(0xFF00E5FF),
                           //         ],
                           //       ),
-                          //       child: const Icon(
-                          //         Icons.videocam,
-                          //         color: Colors.white,
-                          //         size: 22,
-                          //       ),
+                          //       borderRadius: BorderRadius.circular(16),
+                          //       boxShadow: [
+                          //         BoxShadow(
+                          //           color: const Color(
+                          //             0xFF8A2BE2,
+                          //           ).withValues(alpha: 0.4),
+                          //           blurRadius: 12,
+                          //           offset: const Offset(0, 4),
+                          //         ),
+                          //       ],
                           //     ),
-                          //   )
-                          // : const SizedBox(width: 48, height: 48),
+                          //     child: const Icon(
+                          //       Icons.videocam,
+                          //       color: Colors.white,
+                          //       size: 22,
+                          //     ),
+                          //   ),
+                          // ),
+                          trailing: status.toLowerCase() != 'in a call'
+                              ? GestureDetector(
+                                  onTap: () => _placeCall(contactUid),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      gradient: const LinearGradient(
+                                        colors: [
+                                          Color(0xFF8A2BE2),
+                                          Color(0xFF00E5FF),
+                                        ],
+                                      ),
+                                      borderRadius: BorderRadius.circular(16),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: const Color(
+                                            0xFF8A2BE2,
+                                          ).withValues(alpha: 0.4),
+                                          blurRadius: 12,
+                                          offset: const Offset(0, 4),
+                                        ),
+                                      ],
+                                    ),
+                                    child: const Icon(
+                                      Icons.videocam,
+                                      color: Colors.white,
+                                      size: 22,
+                                    ),
+                                  ),
+                                )
+                              : const SizedBox(width: 48, height: 48),
                         ),
                       );
                     },

@@ -127,14 +127,28 @@ class _MyAppState extends State<MyApp> {
               final vact = VactService.instance.vact;
               
               // Find the call in incomingCalls
-              final incomingCallList = await vact.incomingCalls().firstWhere(
-                (calls) => calls.any((c) => c.id == callId), 
-                orElse: () => <VactIncomingCall>[]
-              );
+              var incomingCall = VactService.instance.latestIncomingCalls
+                  .where((c) => c.id == callId)
+                  .firstOrNull;
+
+              if (incomingCall == null) {
+                final incomingCallList = await vact.incomingCalls().firstWhere(
+                  (calls) => calls.any((c) => c.id == callId), 
+                  orElse: () => <VactIncomingCall>[]
+                );
+                if (incomingCallList.isNotEmpty) {
+                  incomingCall = incomingCallList.firstWhere((c) => c.id == callId);
+                }
+              }
               
-              if (incomingCallList.isNotEmpty) {
-                final incomingCall = incomingCallList.firstWhere((c) => c.id == callId);
+              if (incomingCall != null) {
                 final call = await vact.accept(incomingCall);
+                
+                // Wait for the navigator to be ready (e.g. if app was cold booted)
+                while (navigatorKey.currentState == null) {
+                  await Future.delayed(const Duration(milliseconds: 50));
+                }
+                
                 navigatorKey.currentState?.pushNamed('/call', arguments: call);
               }
             } catch (e) {
