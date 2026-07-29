@@ -457,8 +457,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
                               ),
                             ),
                           ),
-                          trailing: status == 'Online'
-                              ? GestureDetector(
+                        trailing:   GestureDetector(
                                   onTap: () => _placeCall(contactUid),
                                   child: Container(
                                     padding: const EdgeInsets.all(12),
@@ -486,8 +485,38 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
                                       size: 22,
                                     ),
                                   ),
-                                )
-                              : const SizedBox(width: 48, height: 48),
+                                ),
+                          // trailing: status == 'Online'
+                              // ? GestureDetector(
+                              //     onTap: () => _placeCall(contactUid),
+                              //     child: Container(
+                              //       padding: const EdgeInsets.all(12),
+                              //       decoration: BoxDecoration(
+                              //         gradient: const LinearGradient(
+                              //           colors: [
+                              //             Color(0xFF8A2BE2),
+                              //             Color(0xFF00E5FF),
+                              //           ],
+                              //         ),
+                              //         borderRadius: BorderRadius.circular(16),
+                              //         boxShadow: [
+                              //           BoxShadow(
+                              //             color: const Color(
+                              //               0xFF8A2BE2,
+                              //             ).withValues(alpha: 0.4),
+                              //             blurRadius: 12,
+                              //             offset: const Offset(0, 4),
+                              //           ),
+                              //         ],
+                              //       ),
+                              //       child: const Icon(
+                              //         Icons.videocam,
+                              //         color: Colors.white,
+                              //         size: 22,
+                              //       ),
+                              //     ),
+                              //   )
+                              // : const SizedBox(width: 48, height: 48),
                         ),
                       );
                     },
