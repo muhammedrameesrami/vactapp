@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:vact_sdk/vact_sdk.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../services/call_log_service.dart';
 
 /// Active video call screen. Receives VactCall via route arguments.
 class CallScreen extends StatefulWidget {
@@ -23,6 +25,7 @@ class _CallScreenState extends State<CallScreen> {
   bool _muted = false;
   bool _cameraOn = true;
   VactCallState _state = VactCallState.connecting;
+  DateTime? _connectedAt;
 
   bool _renderersInitialized = false;
 
@@ -61,7 +64,27 @@ class _CallScreenState extends State<CallScreen> {
       _stateSub = call.states.listen((state) {
         if (!mounted) return;
         setState(() => _state = state);
+        if (state == VactCallState.connected && _connectedAt == null) {
+          _connectedAt = DateTime.now();
+        }
         if (state == VactCallState.ended || state == VactCallState.failed) {
+          final duration = _connectedAt != null
+              ? DateTime.now().difference(_connectedAt!).inSeconds
+              : 0;
+          
+          final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+          
+          CallLogService.saveCallLog(
+            callerUid: call.isCaller ? currentUid : call.otherUserId,
+            callerName: call.isCaller ? 'Me' : call.otherUserId, // Could pass real names if available
+            calleeUid: call.isCaller ? call.otherUserId : currentUid,
+            calleeName: call.isCaller ? call.otherUserId : 'Me',
+            type: 'video', // Assuming video for CallScreen since camera is initialized
+            status: state == VactCallState.ended ? 'connected' : 'failed',
+            duration: duration,
+            endreason: state == VactCallState.ended ? 'completed' : 'failed',
+          );
+
           Navigator.of(context).popUntil((route) => route.settings.name == '/home');
         }
       });

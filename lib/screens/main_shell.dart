@@ -19,8 +19,8 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
 
   final List<Widget> _pages = const [
     HomeTab(),
-    HistoryScreen(),
-    ProfileScreen(),
+    const HistoryScreen(),
+    const ProfileScreen(),
   ];
 
   void _onTabTapped(int index) {

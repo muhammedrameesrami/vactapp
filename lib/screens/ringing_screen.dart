@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:vact_sdk/vact_sdk.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../services/call_log_service.dart';
 
 /// Outgoing ringing screen. Receives the VactCall object via route arguments.
 class RingingScreen extends StatefulWidget {
@@ -33,6 +35,17 @@ class _RingingScreenState extends State<RingingScreen> {
           case VactCallState.ended:
           case VactCallState.failed:
             // Rejected or timed-out — pop back to home
+            final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+            CallLogService.saveCallLog(
+              callerUid: currentUid, // We are the caller
+              callerName: 'Me',
+              calleeUid: call.otherUserId,
+              calleeName: call.otherUserId,
+              type: 'video', // Assuming video
+              status: 'declined', // or missed
+              duration: 0,
+              endreason: state == VactCallState.ended ? 'declined' : 'failed',
+            );
             Navigator.pop(context);
             break;
           default:

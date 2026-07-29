@@ -10,6 +10,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:vact_sdk/vact_sdk.dart';
 
 import '../services/vact_service.dart';
+import '../services/call_log_service.dart';
 
 /// The Home tab — shows the list of other users to call.
 class HomeTab extends StatefulWidget {
@@ -69,17 +70,55 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
     }
   }
 
+  Route? _incomingCallRoute;
+  VactIncomingCall? _lastIncoming;
+  bool _callHandled = false;
+
   void _listenForIncomingCalls() {
     _incomingSub = VactService.instance.vact.incomingCalls().listen((calls) {
-      if (calls.isEmpty || !mounted) return;
-      final incoming = calls.first;
-      Navigator.of(context).push(MaterialPageRoute(
-        fullscreenDialog: true,
-        builder: (_) => _IncomingCallOverlay(
-          incoming: incoming,
-          vact: VactService.instance.vact,
-        ),
-      ));
+      if (!mounted) return;
+      
+      if (calls.isEmpty) {
+        if (_incomingCallRoute != null) {
+          Navigator.of(context).removeRoute(_incomingCallRoute!);
+          _incomingCallRoute = null;
+        }
+        if (_lastIncoming != null && !_callHandled) {
+          final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+          CallLogService.saveCallLog(
+            callerUid: _lastIncoming!.fromUserId,
+            callerName: _lastIncoming!.callerName.isNotEmpty ? _lastIncoming!.callerName : _lastIncoming!.fromUserId,
+            calleeUid: currentUid,
+            calleeName: 'Me',
+            type: _lastIncoming!.type == VactCallType.video ? 'video' : 'audio',
+            status: 'missed',
+            duration: 0,
+            endreason: 'missed',
+          );
+        }
+        _lastIncoming = null;
+        return;
+      }
+
+      if (_incomingCallRoute == null) {
+        final incoming = calls.first;
+        _lastIncoming = incoming;
+        _callHandled = false;
+        
+        _incomingCallRoute = MaterialPageRoute(
+          fullscreenDialog: true,
+          builder: (_) => _IncomingCallOverlay(
+            incoming: incoming,
+            vact: VactService.instance.vact,
+            onHandled: () {
+              _callHandled = true;
+            },
+          ),
+        );
+        Navigator.of(context).push(_incomingCallRoute!).then((_) {
+          _incomingCallRoute = null;
+        });
+      }
     });
   }
 
@@ -399,15 +438,53 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
 
 // ─── Incoming call overlay ───────────────────────────────────────────────────
 
-class _IncomingCallOverlay extends StatelessWidget {
-  const _IncomingCallOverlay({required this.incoming, required this.vact});
+class _IncomingCallOverlay extends StatefulWidget {
+  const _IncomingCallOverlay({super.key, required this.incoming, required this.vact, required this.onHandled});
   final VactIncomingCall incoming;
   final Vact vact;
+  final VoidCallback onHandled;
+
+  @override
+  State<_IncomingCallOverlay> createState() => _IncomingCallOverlayState();
+}
+
+class _IncomingCallOverlayState extends State<_IncomingCallOverlay> {
+  String _callerName = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchCallerName();
+  }
+
+  Future<void> _fetchCallerName() async {
+    if (widget.incoming.callerName.isNotEmpty && widget.incoming.callerName != widget.incoming.fromUserId) {
+      if (mounted) setState(() => _callerName = widget.incoming.callerName);
+      return;
+    }
+    
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.incoming.fromUserId)
+          .get();
+      if (doc.exists && mounted) {
+        setState(() {
+          _callerName = doc.data()?['name'] ?? 'Unknown Caller';
+        });
+      } else {
+        if (mounted) setState(() => _callerName = 'Unknown Caller');
+      }
+    } catch (e) {
+      if (mounted) setState(() => _callerName = 'Unknown Caller');
+    }
+  }
 
   Future<void> _accept(BuildContext context) async {
     HapticFeedback.lightImpact();
     try {
-      final call = await vact.accept(incoming);
+      widget.onHandled();
+      final call = await widget.vact.accept(widget.incoming);
       if (!context.mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => _CallScreenWrapper(call: call)),
@@ -424,7 +501,7 @@ class _IncomingCallOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isVideo = incoming.type == VactCallType.video;
+    final isVideo = widget.incoming.type == VactCallType.video;
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Stack(
@@ -466,9 +543,7 @@ class _IncomingCallOverlay extends StatelessWidget {
                 ),
                 const SizedBox(height: 24),
                 Text(
-                  incoming.callerName.isNotEmpty
-                      ? incoming.callerName
-                      : incoming.fromUserId,
+                  _callerName.isEmpty ? 'Loading...' : _callerName,
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                       fontSize: 30, fontWeight: FontWeight.bold),
@@ -492,7 +567,23 @@ class _IncomingCallOverlay extends StatelessWidget {
                           GestureDetector(
                             onTap: () async {
                               HapticFeedback.lightImpact();
-                              await vact.decline(incoming);
+                              try {
+                                widget.onHandled();
+                                final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+                                CallLogService.saveCallLog(
+                                  callerUid: widget.incoming.fromUserId,
+                                  callerName: _callerName,
+                                  calleeUid: currentUid,
+                                  calleeName: 'Me',
+                                  type: widget.incoming.type == VactCallType.video ? 'video' : 'audio',
+                                  status: 'declined',
+                                  duration: 0,
+                                  endreason: 'declined',
+                                );
+                                await widget.vact.decline(widget.incoming);
+                              } on VactException catch (e) {
+                                debugPrint('Error declining call: $e');
+                              }
                               if (context.mounted) {
                                 Navigator.of(context).pop();
                               }
