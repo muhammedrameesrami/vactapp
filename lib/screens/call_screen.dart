@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:vact_sdk/vact_sdk.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/call_log_service.dart';
 
 /// Active video call screen. Receives VactCall via route arguments.
@@ -26,6 +27,8 @@ class _CallScreenState extends State<CallScreen> {
   bool _cameraOn = true;
   VactCallState _state = VactCallState.connecting;
   DateTime? _connectedAt;
+  Timer? _timer;
+  String _calleeName = '';
 
   bool _renderersInitialized = false;
 
@@ -61,13 +64,29 @@ class _CallScreenState extends State<CallScreen> {
       _call = call;
       _attachStreams();
 
+      FirebaseFirestore.instance
+          .collection('users')
+          .doc(call.otherUserId)
+          .get()
+          .then((doc) {
+        if (mounted && doc.exists) {
+          setState(() {
+            _calleeName = doc.data()?['name'] as String? ?? '';
+          });
+        }
+      });
+
       _stateSub = call.states.listen((state) {
         if (!mounted) return;
         setState(() => _state = state);
         if (state == VactCallState.connected && _connectedAt == null) {
           _connectedAt = DateTime.now();
+          _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+            if (mounted) setState(() {});
+          });
         }
         if (state == VactCallState.ended || state == VactCallState.failed) {
+          _timer?.cancel();
           final duration = _connectedAt != null
               ? DateTime.now().difference(_connectedAt!).inSeconds
               : 0;
@@ -97,6 +116,7 @@ class _CallScreenState extends State<CallScreen> {
 
   @override
   void dispose() {
+    _timer?.cancel();
     _stateSub.cancel();
     _localRenderer.dispose();
     _remoteRenderer.dispose();
@@ -117,6 +137,14 @@ class _CallScreenState extends State<CallScreen> {
   Widget build(BuildContext context) {
     final call = _call;
     final calleeId = call?.otherUserId ?? '';
+    final displayName = _calleeName.isNotEmpty ? _calleeName : calleeId;
+
+    String timerText = '';
+    if (_connectedAt != null) {
+      final duration = DateTime.now().difference(_connectedAt!);
+      String twoDigits(int n) => n.toString().padLeft(2, '0');
+      timerText = '${twoDigits(duration.inMinutes)}:${twoDigits(duration.inSeconds.remainder(60))}';
+    }
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -192,7 +220,7 @@ class _CallScreenState extends State<CallScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  calleeId,
+                  displayName,
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 20,
@@ -202,10 +230,10 @@ class _CallScreenState extends State<CallScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  _statusLabel,
+                  _connectedAt != null ? timerText : _statusLabel,
                   style: const TextStyle(
-                    color: Colors.white60,
-                    fontSize: 13,
+                    color: Colors.white70,
+                    fontSize: 16,
                     shadows: [Shadow(color: Colors.black45, blurRadius: 6)],
                   ),
                 ),

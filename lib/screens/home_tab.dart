@@ -22,6 +22,7 @@ class HomeTab extends StatefulWidget {
 
 class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
   late final StreamSubscription<List<VactIncomingCall>> _incomingSub;
+  final Set<String> _shownCallIds = {};
 
   String _userName = '';
 
@@ -101,14 +102,25 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
       }
 
       if (_incomingCallRoute == null) {
-        final incoming = calls.first;
-        _lastIncoming = incoming;
+        VactIncomingCall? incoming;
+        for (final c in calls) {
+          if (!_shownCallIds.contains(c.id)) {
+            incoming = c;
+            break;
+          }
+        }
+        
+        if (incoming == null) return;
+
+        final incomingCall = incoming;
+        _shownCallIds.add(incomingCall.id);
+        _lastIncoming = incomingCall;
         _callHandled = false;
         
         _incomingCallRoute = MaterialPageRoute(
           fullscreenDialog: true,
           builder: (_) => _IncomingCallOverlay(
-            incoming: incoming,
+            incoming: incomingCall,
             vact: VactService.instance.vact,
             onHandled: () {
               _callHandled = true;
@@ -123,27 +135,17 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
   }
 
   Future<void> _placeCall(String targetUserId) async {
-    print('starttttttttt');
     HapticFeedback.lightImpact();
-    print('1111111111111');
     try {
-      print('22222222222222');
       await _updatePresence('In a Call');
       final call = await VactService.instance.vact.call(
         targetUserId,
         video: true,
       );
-      print('3333333333333333');
       if (!mounted) return;
-      print('4444444444444444');
       await Navigator.pushNamed(context, '/call', arguments: call);
-      print('55555555555555');
       await _updatePresence('Online');
-      print('6666666666666666666');
-    } on VactException catch (e,s) {
-      print('jjjjjjjjjjjjjjjjjjjjjjjjj');
-      print(e.toString());
-      print(s.toString());
+    } on VactException catch (e) {
       HapticFeedback.heavyImpact();
       await _updatePresence('Online');
       if (!mounted) return;
@@ -295,7 +297,6 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
                           data['name'] as String? ?? 'Unknown';
                       final contactUid = data['uid'] as String;
                       final status = data['status'] as String? ?? 'Offline';
-                      print('33333333333333${contactUid}');
 
                       return Container(
                         margin: const EdgeInsets.only(bottom: 12),
@@ -439,7 +440,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
 // ─── Incoming call overlay ───────────────────────────────────────────────────
 
 class _IncomingCallOverlay extends StatefulWidget {
-  const _IncomingCallOverlay({super.key, required this.incoming, required this.vact, required this.onHandled});
+  const _IncomingCallOverlay({required this.incoming, required this.vact, required this.onHandled});
   final VactIncomingCall incoming;
   final Vact vact;
   final VoidCallback onHandled;
@@ -489,11 +490,11 @@ class _IncomingCallOverlayState extends State<_IncomingCallOverlay> {
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => _CallScreenWrapper(call: call)),
       );
-    } on VactException catch (e) {
+    } catch (e) {
       HapticFeedback.heavyImpact();
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+        SnackBar(content: Text('Failed: $e'), backgroundColor: Colors.red),
       );
       Navigator.of(context).pop();
     }
@@ -568,6 +569,7 @@ class _IncomingCallOverlayState extends State<_IncomingCallOverlay> {
                             onTap: () async {
                               HapticFeedback.lightImpact();
                               try {
+                                try {
                                 widget.onHandled();
                                 final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
                                 CallLogService.saveCallLog(
@@ -584,6 +586,7 @@ class _IncomingCallOverlayState extends State<_IncomingCallOverlay> {
                               } on VactException catch (e) {
                                 debugPrint('Error declining call: $e');
                               }
+                              } catch (_) {}
                               if (context.mounted) {
                                 Navigator.of(context).pop();
                               }

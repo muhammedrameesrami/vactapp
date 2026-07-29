@@ -578,6 +578,7 @@ final class Vact {
     final type = event['type'] as String?;
     final callId = event['callId'] as String?;
     print('DEBUG _handleEvent: type=$type, callId=$callId, active=${_calls[callId] != null}');
+    print('DEBUG full event: $event');
     if (callId == null) return;
     final active = _calls[callId];
 
@@ -594,6 +595,7 @@ final class Vact {
               ? VactCallType.video
               : VactCallType.audio,
           expiresAt: _date(event['expiresAt']) ??
+              _date(event['at'])?.add(const Duration(seconds: 45)) ??
               DateTime.now().toUtc().add(const Duration(seconds: 45)),
           offer: Map<String, dynamic>.from(offer),
         );
@@ -1019,6 +1021,9 @@ final class Vact {
   static DateTime? _date(dynamic value) {
     if (value is String && value.isNotEmpty) {
       return DateTime.tryParse(value)?.toUtc();
+    }
+    if (value is num) {
+      return DateTime.fromMillisecondsSinceEpoch(value.toInt(), isUtc: true);
     }
     return null;
   }
