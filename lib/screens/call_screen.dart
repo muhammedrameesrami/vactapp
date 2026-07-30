@@ -25,6 +25,7 @@ class _CallScreenState extends State<CallScreen> {
   final _localRenderer = RTCVideoRenderer();
   final _remoteRenderer = RTCVideoRenderer();
   StreamSubscription<VactCallState>? _stateSub;
+  StreamSubscription<MediaStream>? _remoteStreamSub;
 
   StreamSubscription<CallEvent?>? _callkitEventSub;
 
@@ -261,6 +262,15 @@ class _CallScreenState extends State<CallScreen> {
       }
     });
 
+    _remoteStreamSub = call.onRemoteStream.listen((stream) {
+      if (!mounted) return;
+      if (_renderersInitialized) {
+        setState(() {
+          _remoteRenderer.srcObject = stream;
+        });
+      }
+    });
+
     // Use speaker for video calls
     call.setAudioRoute(VactAudioRoute.speaker);
     if (mounted) setState(() {});
@@ -296,6 +306,7 @@ class _CallScreenState extends State<CallScreen> {
     _ringbackPlayer.dispose();
     _timer?.cancel();
     _stateSub?.cancel();
+    _remoteStreamSub?.cancel();
 
     _callkitEventSub?.cancel();
     _localRenderer.dispose();
