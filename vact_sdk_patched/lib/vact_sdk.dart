@@ -569,10 +569,19 @@ final class Vact {
         _cursor = (batch['cursor'] as num?)?.toInt() ?? _cursor;
         final list = batch['events'];
         if (list is List) {
+          bool needsPublish = false;
           for (final raw in list) {
             if (raw is Map) {
-              await _handleEvent(Map<String, dynamic>.from(raw));
+              final event = Map<String, dynamic>.from(raw);
+              final type = event['type'] as String?;
+              await _handleEvent(event);
+              if (type == 'incoming_call' || type == 'call_ended') {
+                needsPublish = true;
+              }
             }
+          }
+          if (needsPublish) {
+            _publishRinging();
           }
         }
       } on VactException catch (error) {
@@ -609,11 +618,14 @@ final class Vact {
               ? VactCallType.video
               : VactCallType.audio,
           expiresAt: _date(event['expiresAt']) ??
-              _date(event['at'])?.add(const Duration(seconds: 45)) ??
+              (_date(event['at']) ??
+               _date(event['createdAt']) ??
+               _date(event['timestamp']) ??
+               _date(event['time']) ??
+               _date(event['sentAt']))?.add(const Duration(seconds: 45)) ??
               DateTime.now().toUtc().add(const Duration(seconds: 45)),
           offer: Map<String, dynamic>.from(offer),
         );
-        _publishRinging();
         break;
 
       case 'call_answered':
@@ -636,7 +648,6 @@ final class Vact {
 
       case 'call_ended':
         _ringing.remove(callId);
-        _publishRinging();
         await active?.call._shutdown(VactCallState.ended);
         break;
 
@@ -1034,12 +1045,26 @@ final class Vact {
 
   static DateTime? _date(dynamic value) {
     if (value is String && value.isNotEmpty) {
-      return DateTime.tryParse(value)?.toUtc();
+      final parsed = DateTime.tryParse(value);
+      if (parsed != null) return parsed.toUtc();
+      
+      final asNum = num.tryParse(value);
+      if (asNum != null) {
+        return _dateFromNum(asNum);
+      }
     }
     if (value is num) {
-      return DateTime.fromMillisecondsSinceEpoch(value.toInt(), isUtc: true);
+      return _dateFromNum(value);
     }
     return null;
+  }
+
+  static DateTime _dateFromNum(num value) {
+    final intVal = value.toInt();
+    if (intVal < 10000000000) {
+      return DateTime.fromMillisecondsSinceEpoch(intVal * 1000, isUtc: true);
+    }
+    return DateTime.fromMillisecondsSinceEpoch(intVal, isUtc: true);
   }
 
   static void _validateUserId(String value) {

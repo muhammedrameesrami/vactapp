@@ -102,3 +102,5 @@ flutter:
   # see https://flutter.dev/to/font-from-package
 
 dependency_overrides:
+  vact_sdk:
+    path: ./vact_sdk_patched
