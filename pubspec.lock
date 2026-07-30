@@ -776,10 +776,11 @@ packages:
   vact_sdk:
     dependency: "direct main"
     description:
-      path: vact_sdk_patched
-      relative: true
-    source: path
-    version: "2.1.0"
+      name: vact_sdk
+      sha256: "1fd7b06e358d82af31eb4317222dd2cc5cc3897be73599ef09a1935679b6c080"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.2.2"
   vector_math:
     dependency: transitive
     description:
