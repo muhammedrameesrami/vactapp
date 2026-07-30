@@ -142,14 +142,12 @@ class _MyAppState extends State<MyApp> {
               }
               
               if (incomingCall != null) {
-                final call = await vact.accept(incomingCall);
-                
                 // Wait for the navigator to be ready (e.g. if app was cold booted)
                 while (navigatorKey.currentState == null) {
                   await Future.delayed(const Duration(milliseconds: 50));
                 }
                 
-                navigatorKey.currentState?.pushNamed('/call', arguments: call);
+                navigatorKey.currentState?.pushNamed('/call', arguments: incomingCall);
               }
             } catch (e) {
               debugPrint('Failed to accept callkit call: $e');

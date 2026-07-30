@@ -7,8 +7,11 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:vact_sdk/vact_sdk.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:audioplayers/audioplayers.dart';
 import '../services/call_log_service.dart';
-
+import '../services/vact_service.dart';
+import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
+import 'package:flutter_callkit_incoming/entities/entities.dart';
 /// Active video call screen. Receives VactCall via route arguments.
 class CallScreen extends StatefulWidget {
   const CallScreen({super.key});
@@ -21,8 +24,9 @@ class _CallScreenState extends State<CallScreen> {
   VactCall? _call;
   final _localRenderer = RTCVideoRenderer();
   final _remoteRenderer = RTCVideoRenderer();
-  late final StreamSubscription<VactCallState> _stateSub;
+  StreamSubscription<VactCallState>? _stateSub;
   StreamSubscription<MediaStream>? _remoteStreamSub;
+  StreamSubscription<CallEvent?>? _callkitEventSub;
 
   bool _muted = false;
   bool _cameraOn = true;
@@ -30,13 +34,44 @@ class _CallScreenState extends State<CallScreen> {
   DateTime? _connectedAt;
   Timer? _timer;
   String _calleeName = '';
+  
+  final AudioPlayer _ringbackPlayer = AudioPlayer();
+  bool _isPlayingRingback = false;
 
   bool _renderersInitialized = false;
+  bool _isInitializingCall = false;
+  String _targetUserId = ''; // For early display
 
   @override
   void initState() {
     super.initState();
     _initRenderers();
+    
+    _callkitEventSub = FlutterCallkitIncoming.onEvent.listen((event) {
+      if (event is CallEventActionCallEnded) {
+        if (mounted) {
+          _endCallFromAction();
+        }
+      }
+    });
+
+    // Configure audio context to play nicely with WebRTC
+    AudioPlayer.global.setAudioContext(AudioContext(
+      iOS: AudioContextIOS(
+        category: AVAudioSessionCategory.playAndRecord,
+        options: {
+          AVAudioSessionOptions.defaultToSpeaker,
+          AVAudioSessionOptions.mixWithOthers,
+        },
+      ),
+      android: AudioContextAndroid(
+        isSpeakerphoneOn: true,
+        stayAwake: true,
+        contentType: AndroidContentType.music,
+        usageType: AndroidUsageType.voiceCommunication,
+        audioFocus: AndroidAudioFocus.gainTransientMayDuck,
+      ),
+    ));
   }
 
   Future<void> _initRenderers() async {
@@ -60,73 +95,186 @@ class _CallScreenState extends State<CallScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final call = ModalRoute.of(context)?.settings.arguments as VactCall?;
-    if (call != null && _call == null) {
-      _call = call;
-      _attachStreams();
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args != null && _call == null && !_isInitializingCall) {
+      _isInitializingCall = true;
+      if (args is VactCall) {
+        _setupCall(args);
+      } else if (args is VactIncomingCall) {
+        _acceptIncomingCall(args);
+      } else if (args is Map<String, dynamic> && args['targetUserId'] != null) {
+        final targetUserId = args['targetUserId'] as String;
+        setState(() => _targetUserId = targetUserId);
+        _placeOutgoingCall(targetUserId);
+      }
+    }
+  }
 
-      FirebaseFirestore.instance
-          .collection('users')
-          .doc(call.otherUserId)
-          .get()
-          .then((doc) {
-        if (mounted && doc.exists) {
-          setState(() {
-            _calleeName = doc.data()?['name'] as String? ?? '';
-          });
-        }
-      });
-
-      _remoteStreamSub = call.onRemoteStream.listen((stream) {
-        if (!mounted) return;
+  Future<void> _placeOutgoingCall(String targetUserId) async {
+    FirebaseFirestore.instance
+        .collection('users')
+        .doc(targetUserId)
+        .get()
+        .then((doc) {
+      if (mounted && doc.exists) {
         setState(() {
-          _remoteRenderer.srcObject = stream;
+          _calleeName = doc.data()?['name'] as String? ?? '';
         });
-      });
+      }
+    });
 
-      _stateSub = call.states.listen((state) {
-        if (!mounted) return;
-        setState(() => _state = state);
-        if (state == VactCallState.connected && _connectedAt == null) {
-          _connectedAt = DateTime.now();
-          _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-            if (mounted) setState(() {});
-          });
+    try {
+      final call = await VactService.instance.vact.call(
+        targetUserId,
+        video: true,
+      );
+      if (mounted) {
+        _setupCall(call);
+      }
+    } catch (e) {
+      debugPrint('Error placing outgoing call: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Call failed: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      }
+    }
+  }
+
+  Future<void> _acceptIncomingCall(VactIncomingCall incomingCall) async {
+    try {
+      final call = await VactService.instance.vact.accept(incomingCall);
+      if (mounted) {
+        _setupCall(call);
+      }
+    } catch (e) {
+      debugPrint('Error accepting incoming call in CallScreen: $e');
+      if (mounted) {
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      }
+    }
+  }
+
+  void _endCallFromAction() {
+    if (!mounted) return;
+    try {
+      final call = _call;
+      if (call != null) {
+        if (!call.isCaller) {
+          call.end();
+        } else if (_state == VactCallState.ringing || _state == VactCallState.connecting) {
+          call.cancel();
+        } else {
+          call.end();
         }
-        if (state == VactCallState.ended || state == VactCallState.failed) {
-          _timer?.cancel();
-          final duration = _connectedAt != null
-              ? DateTime.now().difference(_connectedAt!).inSeconds
-              : 0;
-          
-          final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
-          
-          CallLogService.saveCallLog(
-            callerUid: call.isCaller ? currentUid : call.otherUserId,
-            callerName: call.isCaller ? 'Me' : call.otherUserId, // Could pass real names if available
-            calleeUid: call.isCaller ? call.otherUserId : currentUid,
-            calleeName: call.isCaller ? call.otherUserId : 'Me',
-            type: 'video', // Assuming video for CallScreen since camera is initialized
-            status: state == VactCallState.ended ? 'connected' : 'failed',
-            duration: duration,
-            endreason: state == VactCallState.ended ? 'completed' : 'failed',
-          );
+      }
+    } catch (e) {
+      debugPrint('Error terminating call from action: $e');
+    }
+    Navigator.of(context).popUntil((route) => route.isFirst);
+  }
 
-          Navigator.of(context).popUntil((route) => route.isFirst);
-        }
+  void _setupCall(VactCall call) {
+    if (!mounted) return;
+    _call = call;
+    _attachStreams();
+
+    FirebaseFirestore.instance
+        .collection('users')
+        .doc(call.otherUserId)
+        .get()
+        .then((doc) {
+      if (mounted && doc.exists) {
+        setState(() {
+          _calleeName = doc.data()?['name'] as String? ?? '';
+        });
+      }
+    });
+
+    _remoteStreamSub = call.onRemoteStream.listen((stream) {
+      if (!mounted) return;
+      setState(() {
+        _remoteRenderer.srcObject = stream;
       });
+    });
 
-      // Use speaker for video calls
-      call.setAudioRoute(VactAudioRoute.speaker);
-      if (mounted) setState(() {});
+    _updateCallState(call.state);
+
+    _stateSub = call.states.listen((state) {
+      if (!mounted) return;
+      _updateCallState(state);
+
+      if (state == VactCallState.connected && _connectedAt == null) {
+        _connectedAt = DateTime.now();
+        _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+          if (mounted) setState(() {});
+        });
+      }
+      if (state == VactCallState.ended || state == VactCallState.failed) {
+        _timer?.cancel();
+        final duration = _connectedAt != null
+            ? DateTime.now().difference(_connectedAt!).inSeconds
+            : 0;
+        
+        final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+        
+        CallLogService.saveCallLog(
+          callerUid: call.isCaller ? currentUid : call.otherUserId,
+          callerName: call.isCaller ? 'Me' : call.otherUserId, // Could pass real names if available
+          calleeUid: call.isCaller ? call.otherUserId : currentUid,
+          calleeName: call.isCaller ? call.otherUserId : 'Me',
+          type: 'video', // Assuming video for CallScreen since camera is initialized
+          status: state == VactCallState.ended ? 'connected' : 'failed',
+          duration: duration,
+          endreason: state == VactCallState.ended ? 'completed' : 'failed',
+        );
+
+        FlutterCallkitIncoming.endAllCalls();
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      }
+    });
+
+    // Use speaker for video calls
+    call.setAudioRoute(VactAudioRoute.speaker);
+    if (mounted) setState(() {});
+  }
+
+  void _updateCallState(VactCallState state) {
+    if (!mounted) return;
+    setState(() => _state = state);
+    
+    final call = _call;
+    if (call != null && call.isCaller) {
+      debugPrint('DEBUG: _updateCallState state is $state, isPlayingRingback: $_isPlayingRingback');
+      if ((state == VactCallState.ringing || state == VactCallState.connecting) && !_isPlayingRingback) {
+        debugPrint('DEBUG: Starting ringback tone');
+        _isPlayingRingback = true;
+        _ringbackPlayer.setReleaseMode(ReleaseMode.loop);
+        _ringbackPlayer.setVolume(1.0);
+        _ringbackPlayer.play(AssetSource('audio/ringback.wav')).then((_) {
+          debugPrint('DEBUG: Play called successfully');
+        }).catchError((e, stack) {
+          debugPrint('DEBUG: Error playing ringback tone: $e\n$stack');
+        });
+      } else if (state != VactCallState.ringing && state != VactCallState.connecting && _isPlayingRingback) {
+        debugPrint('DEBUG: Stopping ringback tone');
+        _isPlayingRingback = false;
+        _ringbackPlayer.stop();
+      }
     }
   }
 
   @override
   void dispose() {
+    _ringbackPlayer.dispose();
     _timer?.cancel();
-    _stateSub.cancel();
+    _stateSub?.cancel();
     _remoteStreamSub?.cancel();
+    _callkitEventSub?.cancel();
     _localRenderer.dispose();
     _remoteRenderer.dispose();
     try {
@@ -146,19 +294,25 @@ class _CallScreenState extends State<CallScreen> {
     super.dispose();
   }
 
-  String get _statusLabel => switch (_state) {
-    VactCallState.ringing => 'Ringing…',
-    VactCallState.connecting => 'Connecting…',
-    VactCallState.connected => 'Connected',
-    VactCallState.reconnecting => 'Reconnecting…',
-    VactCallState.ended => 'Call ended',
-    VactCallState.failed => 'Call failed',
-  };
+  String get _statusLabel {
+    final call = _call;
+    if (call != null && !call.isCaller && _state == VactCallState.ringing) {
+      return 'Connecting…';
+    }
+    return switch (_state) {
+      VactCallState.ringing => 'Ringing…',
+      VactCallState.connecting => 'Connecting…',
+      VactCallState.connected => 'Connected',
+      VactCallState.reconnecting => 'Reconnecting…',
+      VactCallState.ended => 'Call ended',
+      VactCallState.failed => 'Call failed',
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
     final call = _call;
-    final calleeId = call?.otherUserId ?? '';
+    final calleeId = call?.otherUserId ?? _targetUserId;
     final displayName = _calleeName.isNotEmpty ? _calleeName : calleeId;
 
     String timerText = '';
@@ -308,8 +462,9 @@ class _CallScreenState extends State<CallScreen> {
                       ),
                       // End call — larger red button
                       GestureDetector(
-                        onTap: () {
+                        onTap: () async {
                           HapticFeedback.lightImpact();
+                          await FlutterCallkitIncoming.endAllCalls();
                           try {
                             if (call != null) {
                               if (!call.isCaller) {
@@ -323,7 +478,9 @@ class _CallScreenState extends State<CallScreen> {
                           } catch (e) {
                             debugPrint('Error hanging up call: $e');
                           }
-                          Navigator.of(context).popUntil((route) => route.isFirst);
+                          if (context.mounted) {
+                            Navigator.of(context).popUntil((route) => route.isFirst);
+                          }
                         },
                         child: Container(
                           width: 60,

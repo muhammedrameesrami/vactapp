@@ -12,6 +12,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 
 import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 import 'package:flutter_callkit_incoming/entities/entities.dart';
+import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
 
 import '../services/vact_service.dart';
 import '../services/call_log_service.dart';
@@ -225,25 +226,13 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
 
   Future<void> _placeCall(String targetUserId) async {
     HapticFeedback.lightImpact();
-    try {
-      await _updatePresence('In a Call');
-      final call = await VactService.instance.vact.call(
-        targetUserId,
-        video: true,
-      );
-      if (!mounted) return;
-      await Navigator.of(context).pushNamed('/call', arguments: call);
-      await _updatePresence('Online');
-    } on VactException catch (e) {
-      HapticFeedback.heavyImpact();
-      await _updatePresence('Online');
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Call failed: ${e.message}'),
-          backgroundColor: Colors.red,
-        ),
-      );
+    // Don't await presence update to navigate instantly
+    _updatePresence('In a Call');
+    
+    await Navigator.of(context).pushNamed('/call', arguments: {'targetUserId': targetUserId});
+    
+    if (mounted) {
+      _updatePresence('Online');
     }
   }
 
@@ -599,6 +588,13 @@ class _IncomingCallOverlayState extends State<_IncomingCallOverlay> {
   void initState() {
     super.initState();
     _fetchCallerName();
+    FlutterRingtonePlayer().playRingtone(looping: true);
+  }
+
+  @override
+  void dispose() {
+    FlutterRingtonePlayer().stop();
+    super.dispose();
   }
 
   Future<void> _fetchCallerName() async {
