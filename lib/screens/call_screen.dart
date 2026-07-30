@@ -131,8 +131,19 @@ class _CallScreenState extends State<CallScreen> {
       if (mounted) {
         _setupCall(call);
       }
-    } catch (e) {
+    } on VactException catch (e) {
       debugPrint('Error placing outgoing call: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Call failed: ${e.message}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      }
+    } catch (e) {
+      debugPrint('Unexpected error placing outgoing call: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -151,9 +162,26 @@ class _CallScreenState extends State<CallScreen> {
       if (mounted) {
         _setupCall(call);
       }
-    } catch (e) {
+    } on VactException catch (e) {
       debugPrint('Error accepting incoming call in CallScreen: $e');
       if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Call failed: ${e.message}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      }
+    } catch (e) {
+      debugPrint('Unexpected error accepting incoming call in CallScreen: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Call failed: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
         Navigator.of(context).popUntil((route) => route.isFirst);
       }
     }
